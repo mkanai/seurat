@@ -1342,6 +1342,9 @@ SCTransform.StdAssay <- function(
           umi = counts.vp[all_features,,drop=FALSE],
           verbosity = FALSE# as.numeric(x = verbose) * 2
         )
+        temp <- tempfile()
+        BPCells::write_matrix_dir(mat = corrected_counts[[i]], dir = temp)
+        corrected_counts[[i]] <- BPCells::open_matrix_dir(dir = temp)
         residuals[[i]] <- new_residual
         cell_attrs[[i]] <- cell.attr.object
       }
