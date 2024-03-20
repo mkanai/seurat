@@ -1345,9 +1345,9 @@ SCTransform.StdAssay <- function(
         residuals[[i]] <- new_residual
         cell_attrs[[i]] <- cell.attr.object
       }
-      new.residuals <- Reduce(cbind, residuals)
-      corrected_counts <- Reduce(cbind, corrected_counts)
-      cell_attrs <- Reduce(rbind, cell_attrs)
+      new.residuals <- do.call(cbind, residuals)
+      corrected_counts <- do.call(cbind, corrected_counts)
+      cell_attrs <- do.call(rbind, cell_attrs)
       vst_out.reference$cell_attr <- cell_attrs[colnames(new.residuals),,drop=FALSE]
       SCTModel.list <- PrepVSTResults(vst.res = vst_out.reference, cell.names = all_cells)
       SCTModel.list <- list(model1 = SCTModel.list)
@@ -1596,7 +1596,7 @@ FetchResiduals <- function(
   if (length(x = new.residuals) == 1 & is.list(x = new.residuals)) {
     new.residuals <- new.residuals[[1]]
   } else {
-    new.residuals <- Reduce(cbind, new.residuals)
+    new.residuals <- do.call(cbind, new.residuals)
     #new.residuals <- matrix(data = unlist(new.residuals), nrow = nrow(new.scale) , ncol = ncol(new.scale))
     #colnames(new.residuals) <- colnames(new.scale)
     #rownames(new.residuals) <- rownames(new.scale)
@@ -1905,7 +1905,7 @@ GetResidualsChunked <- function(vst_out, layer.counts, residual_type, min_varian
         verbosity = as.numeric(x = verbose) * 2
       )
     }
-    residuals <- Reduce(f = cbind, x = residuals.list)
+    residuals <- do.call(f = cbind, x = residuals.list)
   } else {
     stop("Data type not supported")
   }
