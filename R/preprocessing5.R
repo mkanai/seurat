@@ -1370,7 +1370,7 @@ SCTransform.StdAssay <- function(
         verbose = verbose
       )
       assay.out <- CreateSCTAssayObject(counts = corrected_counts, scale.data = new.residuals,  SCTModel.list = SCTModel.list)
-      assay.out$data <- log1p(x = corrected_counts)
+      # assay.out$data <- log1p(x = corrected_counts)
       VariableFeatures(assay.out) <- variable.features
       # one assay per dataset
       if (verbose){
