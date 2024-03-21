@@ -1294,8 +1294,6 @@ SCTransform.StdAssay <- function(
     cells.vector <- 1:ncol(x = layer.data)
     cells.grid <- split(x = cells.vector, f = ceiling(x = seq_along(along.with = cells.vector)/ncells))
     # Single block
-    current_res_col <- 1
-    new.residuals <- matrix(nrow = nrow(layer.data), ncol = ncol(layer.data))
     corrected_counts <- list()
     cell_attrs <- list()
 
@@ -1306,6 +1304,9 @@ SCTransform.StdAssay <- function(
       cell_attrs[[1]] <- vst_out.reference$cell_attr
       sct.assay.list[[dataset.names[dataset.index]]] <- assay.out
     } else {
+      current_res_col <- 1
+      new.residuals <- matrix(nrow = ifelse(return.only.var.genes, length(variable.features), length(all_features)), ncol = ncol(layer.data))
+
       # iterate over chunks to get residuals
       for (i in seq_len(length.out = length(x = cells.grid))) {
         vp <- cells.grid[[i]]
