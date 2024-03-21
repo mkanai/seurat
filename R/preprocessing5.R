@@ -1305,7 +1305,11 @@ SCTransform.StdAssay <- function(
       sct.assay.list[[dataset.names[dataset.index]]] <- assay.out
     } else {
       current_res_col <- 1
-      new.residuals <- matrix(nrow = ifelse(return.only.var.genes, length(variable.features), length(all_features)), ncol = ncol(layer.data))
+      new.residuals <- matrix(
+        nrow = ifelse(return.only.var.genes, length(variable.features), length(all_features)),
+        ncol = ncol(layer.data),
+        dimnames = list(if(return.only.var.genes){variable.features}else{all_features}, colnames(layer.data))
+      )
 
       # iterate over chunks to get residuals
       for (i in seq_len(length.out = length(x = cells.grid))) {
@@ -1348,7 +1352,6 @@ SCTransform.StdAssay <- function(
         BPCells::write_matrix_dir(mat = corrected_counts[[i]], dir = temp)
         corrected_counts[[i]] <- BPCells::open_matrix_dir(dir = temp)
         new.residuals[, current_res_col:(current_res_col + ncol(new_residual) - 1)] <- new_residual
-        colnames(new.residuals)[current_res_col:(current_res_col + ncol(new_residual) - 1)] <- colnames(new_residual)
         current_res_col <- current_res_col + ncol(new_residual)
         cell_attrs[[i]] <- cell.attr.object
       }
