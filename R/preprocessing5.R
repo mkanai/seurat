@@ -1352,12 +1352,11 @@ SCTransform.StdAssay <- function(
         BPCells::write_matrix_dir(mat = corrected_counts[[i]], dir = temp)
         corrected_counts[[i]] <- BPCells::open_matrix_dir(dir = temp)
         new.residuals[, current_res_col:(current_res_col + ncol(new_residual) - 1)] <- new_residual
-        colnames(new.residuals)[current_res_col:(current_res_col + ncol(new_residual) - 1)] <- colnames(new_residual)
         current_res_col <- current_res_col + ncol(new_residual)
         cell_attrs[[i]] <- cell.attr.object
       }
       corrected_counts <- Reduce(cbind, corrected_counts)
-      cell_attrs <- as.data.frame(data.table::rbindlist(cell_attrs))
+      cell_attrs <- Reduce(rbind, cell_attrs)
       vst_out.reference$cell_attr <- cell_attrs[colnames(new.residuals),,drop=FALSE]
       SCTModel.list <- PrepVSTResults(vst.res = vst_out.reference, cell.names = all_cells)
       SCTModel.list <- list(model1 = SCTModel.list)
