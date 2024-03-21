@@ -1347,7 +1347,7 @@ SCTransform.StdAssay <- function(
         corrected_counts[[i]] <- BPCells::open_matrix_dir(dir = temp)
         residuals[[i]] <- new_residual
         temp <- tempfile()
-        BPCells::write_matrix_dir(mat = residuals[[i]], dir = temp)
+        BPCells::write_matrix_dir(mat = as(residuals[[i]], "dgCMatrix"), dir = temp)
         residuals[[i]] <- BPCells::open_matrix_dir(dir = temp)
         cell_attrs[[i]] <- cell.attr.object
       }
