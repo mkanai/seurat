@@ -1348,6 +1348,7 @@ SCTransform.StdAssay <- function(
         BPCells::write_matrix_dir(mat = corrected_counts[[i]], dir = temp)
         corrected_counts[[i]] <- BPCells::open_matrix_dir(dir = temp)
         new.residuals[, current_res_col:(current_res_col + ncol(new_residual) - 1)] <- new_residual
+        colnames(new.residuals)[current_res_col:(current_res_col + ncol(new_residual) - 1)] <- colnames(new_residual)
         current_res_col <- current_res_col + ncol(new_residual)
         cell_attrs[[i]] <- cell.attr.object
       }
