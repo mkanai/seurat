@@ -1294,14 +1294,15 @@ SCTransform.StdAssay <- function(
     cells.vector <- 1:ncol(x = layer.data)
     cells.grid <- split(x = cells.vector, f = ceiling(x = seq_along(along.with = cells.vector)/ncells))
     # Single block
-    residuals <- list()
+    current_res_col <- 1
+    new.residuals <- matrix(nrow = nrow(layer.data), ncol = ncol(layer.data))
     corrected_counts <- list()
     cell_attrs <- list()
 
     if (length(x = cells.grid) == 1){
       merged.assay <- assay.out
       corrected_counts[[1]] <- GetAssayData(object = assay.out, slot = "data")
-      residuals[[1]] <- GetAssayData(object = assay.out, slot = "scale.data")
+      new.residuals <- GetAssayData(object = assay.out, slot = "scale.data")
       cell_attrs[[1]] <- vst_out.reference$cell_attr
       sct.assay.list[[dataset.names[dataset.index]]] <- assay.out
     } else {
@@ -1345,13 +1346,10 @@ SCTransform.StdAssay <- function(
         temp <- tempfile()
         BPCells::write_matrix_dir(mat = corrected_counts[[i]], dir = temp)
         corrected_counts[[i]] <- BPCells::open_matrix_dir(dir = temp)
-        residuals[[i]] <- new_residual
-        temp <- tempfile()
-        BPCells::write_matrix_dir(mat = as(residuals[[i]], "dgCMatrix"), dir = temp)
-        residuals[[i]] <- BPCells::open_matrix_dir(dir = temp)
+        new.residuals[, current_res_col:(current_res_col + ncol(new_residual) - 1)] <- new_residual
+        current_res_col <- current_res_col + ncol(new_residual)
         cell_attrs[[i]] <- cell.attr.object
       }
-      new.residuals <- as.matrix(Reduce(cbind, residuals))
       corrected_counts <- Reduce(cbind, corrected_counts)
       cell_attrs <- as.data.frame(data.table::rbindlist(cell_attrs))
       vst_out.reference$cell_attr <- cell_attrs[colnames(new.residuals),,drop=FALSE]
