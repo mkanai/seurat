@@ -1188,6 +1188,7 @@ SCTransform.StdAssay <- function(
   clip.range = c(-sqrt(x = ncol(x = object) / 30), sqrt(x = ncol(x = object) / 30)),
   vst.flavor = 'v2',
   conserve.memory = FALSE,
+  write.on.disk = FALSE,
   return.only.var.genes = TRUE,
   seed.use = 1448145,
   verbose = TRUE,
@@ -1342,6 +1343,12 @@ SCTransform.StdAssay <- function(
           umi = counts.vp[all_features,,drop=FALSE],
           verbosity = FALSE# as.numeric(x = verbose) * 2
         )
+        if (write.on.disk) {
+          corrected_counts[[i]] <- BPCells::write_matrix_dir(
+            mat = BPCells::convert_matrix_type(corrected_counts[[i]], "uint32_t"),
+            tempdir()
+          )
+        }
         residuals[[i]] <- new_residual
         cell_attrs[[i]] <- cell.attr.object
       }
