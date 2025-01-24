@@ -1344,9 +1344,10 @@ SCTransform.StdAssay <- function(
           verbosity = FALSE# as.numeric(x = verbose) * 2
         )
         if (write.on.disk) {
+          tmpdir <- tempfile()
           corrected_counts[[i]] <- BPCells::write_matrix_dir(
             mat = BPCells::convert_matrix_type(corrected_counts[[i]], "uint32_t"),
-            tempdir()
+            tmpdir
           )
         }
         residuals[[i]] <- new_residual
@@ -1812,6 +1813,224 @@ SCTransform_step2 <- function(
   slot(object = merged.assay, name="SCTModel.list") <- models
   gc(verbose = FALSE)
   return(merged.assay)
+  }
+
+#' @importFrom SeuratObject Cells DefaultLayer DefaultLayer<- Features
+#' LayerData LayerData<- as.sparse
+#'
+#' @export
+#'
+SCTransform_step1_ <- function(
+  object,
+  layer = 'counts',
+  cell.attr = NULL,
+  reference.SCT.model = NULL,
+  do.correct.umi = TRUE,
+  ncells = 5000,
+  residual.features = NULL,
+  variable.features.n = 3000,
+  variable.features.rv.th = 1.3,
+  vars.to.regress = NULL,
+  latent.data = NULL,
+  do.scale = FALSE,
+  do.center = TRUE,
+  clip.range = c(-sqrt(x = ncol(x = object) / 30), sqrt(x = ncol(x = object) / 30)),
+  vst.flavor = 'v2',
+  conserve.memory = FALSE,
+  return.only.var.genes = TRUE,
+  seed.use = 1448145,
+  verbose = TRUE,
+  ...) {
+  if (!is.null(x = seed.use)) {
+    set.seed(seed = seed.use)
+  }
+  if (!is.null(reference.SCT.model)){
+    do.correct.umi <- FALSE
+    do.center <- FALSE
+  }
+  olayer <- layer <- unique(x = layer)
+  layers <- Layers(object = object, search = layer)
+  dataset.names <- gsub(pattern = paste0(layer, "."), replacement = "", x = layers)
+  # loop over layers performing SCTransform() on individual layers
+  sct.assay.list <- list()
+  # Keep a tab of variable features per chunk
+  variable.feature.list <- list()
+
+  count.path.list <- list()
+
+  for (dataset.index in seq_along(along.with = layers)) {
+    l <- layers[dataset.index]
+    if (isTRUE(x = verbose)) {
+      message("Running SCTransform on layer: ", l)
+    }
+    all_cells <-  Cells(x = object, layer = l)
+    all_features <- Features(x = object, layer = l)
+    layer.data <- LayerData(
+      object = object,
+      layer = l,
+      features = all_features,
+      cells = all_cells
+    )
+    local.reference.SCT.model <- NULL
+    set.seed(seed = seed.use)
+    do.correct.umi.chunk <- FALSE
+    sct.function <- if (inherits(x = layer.data, what = 'V3Matrix')) {
+      SCTransform.default
+    } else {
+      SCTransform
+    }
+    if (is.null(x = cell.attr) && is.null(x = reference.SCT.model)){
+      calcn <- CalcN(object = layer.data)
+      cell.attr.layer <-  data.frame(umi = calcn$nCount,
+                               log_umi = log10(x = calcn$nCount))
+      rownames(cell.attr.layer) <- colnames(x = layer.data)
+    } else {
+      cell.attr.layer <- cell.attr[colnames(x = layer.data),, drop=FALSE]
+    }
+    if (!"umi" %in% cell.attr.layer && is.null(x = reference.SCT.model)){
+      calcn <- CalcN(object = layer.data)
+      cell.attr.tmp <-  data.frame(umi = calcn$nCount)
+      rownames(cell.attr.tmp) <- colnames(x = layer.data)
+      cell.attr.layer$umi <- NA
+      cell.attr.layer$log_umi <- NA
+      cell.attr.layer[rownames(cell.attr.tmp), "umi"] <- cell.attr.tmp$umi
+      cell.attr.layer[rownames(cell.attr.tmp), "log_umi"] <- log10(x = cell.attr.tmp$umi)
+    }
+
+    # Step 1: Learn model
+    vst.out <- sct.function(object = layer.data,
+                            do.correct.umi = TRUE,
+                            cell.attr = cell.attr.layer,
+                            reference.SCT.model = reference.SCT.model,
+                            ncells = ncells,
+                            residual.features = residual.features,
+                            variable.features.n = variable.features.n,
+                            variable.features.rv.th = variable.features.rv.th,
+                            vars.to.regress = vars.to.regress,
+                            latent.data = latent.data,
+                            do.scale = do.scale,
+                            do.center = do.center,
+                            clip.range = clip.range,
+                            vst.flavor = vst.flavor,
+                            conserve.memory = conserve.memory,
+                            return.only.var.genes = return.only.var.genes,
+                            seed.use = seed.use,
+                            verbose = verbose,
+                            ...)
+    min_var <- vst.out$arguments$min_variance
+    residual.type <- vst.out[['residual_type']] %||% 'pearson'
+    assay.out <- CreateSCTAssay(vst.out = vst.out, do.correct.umi = do.correct.umi, residual.type = residual.type,
+                                clip.range = clip.range)
+
+    # If there is no reference model, use the model learned on subset of cells to calculate residuals
+    # by setting the learned model as the reference model (local.reference.SCT.model)
+    if (is.null(x = reference.SCT.model)) {
+      local.reference.SCT.model <- assay.out@SCTModel.list[[1]]
+    } else {
+      local.reference.SCT.model <- reference.SCT.model
+    }
+    variable.features <- VariableFeatures(assay.out)
+
+    # once we have the model, just calculate residuals for all cells
+    # local.reference.SCT.model set to reference.model if it is non null
+    vst_out.reference <- SCTModel_to_vst(SCTModel = local.reference.SCT.model)
+    vst_out.reference$gene_attr <- local.reference.SCT.model@feature.attributes
+    min_var <- vst_out.reference$arguments$min_variance
+    if (min_var == "umi_median"){
+      counts.x <- as.sparse(x = layer.data[, sample.int(n = ncol(x = layer.data), size =  min(ncells, ncol(x = layer.data)) )])
+      min_var <- (median(counts.x@x)/5)^2
+      }
+
+    # Step 2: Use learned model to calculate residuals in chunks
+    cells.vector <- 1:ncol(x = layer.data)
+    cells.grid <- split(x = cells.vector, f = ceiling(x = seq_along(along.with = cells.vector)/ncells))
+    # Single block
+    counts_paths <- list()
+
+    step2_inputs <- list(
+      vst_out = vst_out.reference,
+      cell.attr.layer = cell.attr.layer,
+      all_features = all_features,
+      variable.features = variable.features,
+      min_var = min_var,
+      clip.range = clip.range,
+      return.only.var.genes = return.only.var.genes
+    )
+    saveRDS(step2_inputs, sprintf("%s.step2.inputs.rds", dataset.names[[dataset.index]]))
+
+    # iterate over chunks to get residuals
+    for (i in seq_len(length.out = length(x = cells.grid))) {
+      vp <- cells.grid[[i]]
+      if (verbose){
+        message("Saving counts for block ", i, "(of ", length(cells.grid), ") for ", dataset.names[[dataset.index]], " dataset")
+      }
+      counts.vp <- as.sparse(x = layer.data[, vp, drop=FALSE])
+      counts_paths[[i]] <- sprintf("%s.%i.step2.h5", dataset.names[[dataset.index]], i)
+      BPCells::write_matrix_hdf5(
+        mat = BPCells::convert_matrix_type(counts.vp, "uint32_t"), 
+        counts_paths[[i]],
+        "counts"
+      )
+    }
+    count.path.list[[dataset.names[[dataset.index]]]] <- counts_paths
+  }
+  return(count.path.list)
+  }
+
+
+#' @importFrom SeuratObject Cells DefaultLayer DefaultLayer<- Features
+#' LayerData LayerData<- as.sparse
+#'
+#' @export
+#'
+SCTransform_step2_ <- function(
+  counts.vp,
+  vst_out,
+  cell.attr.layer,
+  all_features,
+  variable.features,
+  min_var,
+  clip.range,
+  return.only.var.genes,
+  seed.use = 1448145,
+  verbose = TRUE,
+  ...) {
+  if (!is.null(x = seed.use)) {
+    set.seed(seed = seed.use)
+  }
+
+  # Step 2: Use learned model to calculate residuals in chunks
+  cell.attr.object <- cell.attr.layer[colnames(x = counts.vp),, drop=FALSE]
+
+  vst_out$cell_attr <- cell.attr.object
+  vst_out$gene_attr <- vst_out$gene_attr[variable.features,,drop=FALSE]
+  if (return.only.var.genes){
+    new_residual <- get_residuals(
+      vst_out = vst_out,
+      umi = counts.vp[variable.features,,drop=FALSE],
+      residual_type = "pearson",
+      min_variance = min_var,
+      res_clip_range = clip.range,
+      verbosity =  FALSE
+    )
+  } else {
+    new_residual <- get_residuals(
+      vst_out = vst_out,
+      umi = counts.vp[all_features,,drop=FALSE],
+      residual_type = "pearson",
+      min_variance = min_var,
+      res_clip_range = clip.range,
+      verbosity =  FALSE
+    )
+  }
+  vst_out$y <- new_residual
+  corrected_counts <- correct_counts(
+    x = vst_out,
+    umi = counts.vp[all_features,,drop=FALSE],
+    verbosity = FALSE# as.numeric(x = verbose) * 2
+  )
+
+  return(corrected_counts)
   }
 
 #' Calculate pearson residuals of features not in the scale.data
