@@ -1945,18 +1945,7 @@ SCTransform_step1_ <- function(
     cells.vector <- 1:ncol(x = layer.data)
     cells.grid <- split(x = cells.vector, f = ceiling(x = seq_along(along.with = cells.vector)/ncells))
     # Single block
-    counts_paths <- list()
-
-    step2_inputs <- list(
-      vst_out = vst_out.reference,
-      cell.attr.layer = cell.attr.layer,
-      all_features = all_features,
-      variable.features = variable.features,
-      min_var = min_var,
-      clip.range = clip.range,
-      return.only.var.genes = return.only.var.genes
-    )
-    saveRDS(step2_inputs, sprintf("%s.step2.inputs.rds", dataset.names[[dataset.index]]))
+    counts.paths <- list()
 
     # iterate over chunks to get residuals
     for (i in seq_len(length.out = length(x = cells.grid))) {
@@ -1965,16 +1954,25 @@ SCTransform_step1_ <- function(
         message("Saving counts for block ", i, "(of ", length(cells.grid), ") for ", dataset.names[[dataset.index]], " dataset")
       }
       counts.vp <- as.sparse(x = layer.data[, vp, drop=FALSE])
-      counts_paths[[i]] <- sprintf("%s.%i.step2.h5", dataset.names[[dataset.index]], i)
+      counts.paths[[i]] <- sprintf("%s.step1.%i.h5", dataset.names[[dataset.index]], i)
       BPCells::write_matrix_hdf5(
         mat = BPCells::convert_matrix_type(counts.vp, "uint32_t"), 
-        counts_paths[[i]],
+        counts.paths[[i]],
         "counts"
       )
     }
-    count.path.list[[dataset.names[[dataset.index]]]] <- counts_paths
+    sct.assay.list[[l]] <- list(
+      vst_out = vst_out.reference,
+      cell.attr.layer = cell.attr.layer,
+      all_features = all_features,
+      variable.features = variable.features,
+      min_var = min_var,
+      clip.range = clip.range,
+      return.only.var.genes = return.only.var.genes,
+      counts.paths = counts.paths
+    )
   }
-  return(count.path.list)
+  return(sct.assay.list)
   }
 
 
