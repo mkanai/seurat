@@ -1355,6 +1355,13 @@ SCTransform.StdAssay <- function(
       }
       new.residuals <- Reduce(cbind, residuals)
       corrected_counts <- Reduce(cbind, corrected_counts)
+      if (write.on.disk) {
+        tmpdir <- tempfile()
+        message("Returning corrected counts for ", dataset.names[dataset.index], "stored at ", tmpdir)
+        return(list(SCT = list(
+          counts = BPCells::write_matrix_dir(mat = BPCells::convert_matrix_type(corrected_counts, "uint32_t"), tmpdir)
+        )))
+      }
       cell_attrs <- Reduce(rbind, cell_attrs)
       vst_out.reference$cell_attr <- cell_attrs[colnames(new.residuals),,drop=FALSE]
       SCTModel.list <- PrepVSTResults(vst.res = vst_out.reference, cell.names = all_cells)
