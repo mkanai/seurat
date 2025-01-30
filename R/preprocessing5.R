@@ -1819,6 +1819,7 @@ SCTransform_step1_ <- function(
   reference.SCT.model = NULL,
   do.correct.umi = TRUE,
   ncells = 5000,
+  ncells_chunk = NULL,
   residual.features = NULL,
   variable.features.n = 3000,
   variable.features.rv.th = 1.3,
@@ -1848,6 +1849,9 @@ SCTransform_step1_ <- function(
   if (!is.null(reference.SCT.model)){
     do.correct.umi <- FALSE
     do.center <- FALSE
+  }
+  if (is.null(ncells_chunk)){
+    ncells_chunk <- ncells
   }
   olayer <- layer <- unique(x = layer)
   layers <- Layers(object = object, search = layer)
@@ -1944,7 +1948,7 @@ SCTransform_step1_ <- function(
 
     # Step 2: Use learned model to calculate residuals in chunks
     cells.vector <- 1:ncol(x = layer.data)
-    cells.grid <- split(x = cells.vector, f = ceiling(x = seq_along(along.with = cells.vector)/ncells))
+    cells.grid <- split(x = cells.vector, f = ceiling(x = seq_along(along.with = cells.vector)/ncells_chunk))
     # Single block
     counts.paths <- list()
 
